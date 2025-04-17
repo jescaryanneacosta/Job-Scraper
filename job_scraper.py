@@ -1,24 +1,11 @@
-import streamlit as st
-from bs4 import BeautifulSoup
-from collections import Counter
-import pandas as pd
-import matplotlib.pyplot as plt
+import requests
 import json
-import time
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
-import requests  # <-- you forgot this!
+from collections import Counter
+import http.client
+import streamlit as st
+import pandas as pd
 
-# Set up global driver
-options = webdriver.ChromeOptions()
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
-# Load keywords
+# ---------- Load JSON Keywords ----------
 def load_keywords(json_file):
     data = json.load(json_file)
     keywords = []
@@ -26,62 +13,55 @@ def load_keywords(json_file):
         keywords.extend(items)
     return [kw.lower() for kw in keywords]
 
-# Indeed scraper with Selenium
-def scrape_indeed(query, location, pages=3):
-    descriptions = []
-    base_url = "https://ph.indeed.com/jobs"
+# ---------- Fetch Jobs Using JSearch API ----------
+def fetch_jobs(query, api_key, num_results=10):
+    url = "https://jsearch.p.rapidapi.com/search"
+    
+    headers = {
+        "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+        "X-RapidAPI-Key": api_key
+    }
+    
+    params = {
+        "query": query,
+        "page": "1",  # You can loop over pages later if needed
+        "num_pages": "1",  # Change this for more results
+        "page_size": str(num_results)
+    }
 
-    for page in range(pages):
-        start = page * 10
-        search_url = f"{base_url}?q={query}&l={location}&start={start}"
-        driver.get(search_url)
-        time.sleep(2)
+    response = requests.get(url, headers=headers, params=params)
+    job_data = response.json()
+    job_descriptions = []
 
-        job_cards = driver.find_elements(By.CLASS_NAME, "jcs-JobTitle")
-        print(f"Indeed Page {page+1}: Found {len(job_cards)} job links")
+    if "jobs" in job_data:
+        for job in job_data["jobs"]:
+            title = job.get("job_title", "").lower()
+            description = job.get("job_description", "").lower()
+            job_descriptions.append(f"{title} {description}")
+    
+    return job_descriptions
 
-        job_links = [card.get_attribute("href") for card in job_cards if card.get_attribute("href")]
+# ---------- Fetch Estimated Salary Using JSearch API ----------
+def fetch_salary_estimate(api_key, location="ANY", years_of_experience="ALL"):
+    conn = http.client.HTTPSConnection("jsearch.p.rapidapi.com")
+    headers = {
+        "x-rapidapi-key": api_key,
+        "x-rapidapi-host": "jsearch.p.rapidapi.com"
+    }
+    
+    # You can pass more parameters to customize the salary estimate
+    conn.request("GET", f"/estimated-salary?location_type={location}&years_of_experience={years_of_experience}", headers=headers)
 
-        for link in job_links:
-            try:
-                driver.get(link)
-                time.sleep(2)
-                desc_div = driver.find_element(By.ID, "jobDescriptionText")
-                descriptions.append(desc_div.text)
-            except Exception as e:
-                print("Error fetching job desc:", e)
-                continue
+    res = conn.getresponse()
+    data = res.read()
+    salary_data = json.loads(data.decode("utf-8"))
 
-    return descriptions
+    if "estimated_salary" in salary_data:
+        return salary_data["estimated_salary"]
+    else:
+        return None
 
-# JobStreet scraper
-def scrape_jobstreet(query, pages=2):
-    descriptions = []
-    base_url = f"https://www.jobstreet.com.ph/en/job-search/{query.replace(' ', '-')}-jobs/"
-
-    for page in range(1, pages + 1):
-        full_url = f"{base_url}?page={page}"
-        driver.get(full_url)
-        time.sleep(3)
-
-        jobs = driver.find_elements(By.CSS_SELECTOR, 'a[data-automation="jobTitle"]')
-        print(f"JobStreet Page {page}: Found {len(jobs)} job links")
-
-        links = [job.get_attribute("href") for job in jobs if job.get_attribute("href")]
-
-        for link in links:
-            try:
-                driver.get(link)
-                time.sleep(2)
-                job_desc_el = driver.find_element(By.CLASS_NAME, "sx2jih0")
-                descriptions.append(job_desc_el.text)
-            except Exception as e:
-                print("Error loading job description:", e)
-                continue
-
-    return descriptions
-
-# Count keyword mentions
+# ---------- Count Keywords in Descriptions ----------
 def count_keywords(descriptions, keywords):
     counter = Counter()
     for desc in descriptions:
@@ -91,23 +71,19 @@ def count_keywords(descriptions, keywords):
                 counter[keyword] += 1
     return counter
 
-# Streamlit UI
+# ---------- Streamlit UI ----------
 st.title("Frontend Job Tech Trends 📈")
 
 query = st.text_input("Job title (e.g., frontend developer)", value="frontend developer")
-location = st.text_input("Location (for Indeed)", value="Philippines")
-pages = st.slider("Pages to scrape per site", 1, 5, 2)
 uploaded_file = st.file_uploader("Upload JSON file with frontend technologies", type="json")
+api_key = st.text_input("Enter your X-RapidAPI-Key", value="", type="password")
 
-if st.button("Run Scraper") and uploaded_file:
-    with st.spinner("Scraping job listings..."):
+if st.button("Run Scraper") and uploaded_file and api_key:
+    with st.spinner("Fetching job listings..."):
         keywords = load_keywords(uploaded_file)
-        indeed_desc = scrape_indeed(query, location, pages)
-        jobstreet_desc = scrape_jobstreet(query, pages)
-        all_desc = indeed_desc + jobstreet_desc
-
-        print(f"Total descriptions scraped: {len(all_desc)}")
-        counts = count_keywords(all_desc, keywords)
+        descriptions = fetch_jobs(query, api_key, num_results=50)
+        
+        counts = count_keywords(descriptions, keywords)
 
         if counts:
             df = pd.DataFrame(counts.items(), columns=["Technology", "Frequency"])
@@ -123,6 +99,12 @@ if st.button("Run Scraper") and uploaded_file:
                 mime="text/csv"
             )
         else:
-            st.warning("No technologies were found in the scraped job listings.")
-
-driver.quit()
+            st.warning("No job listings found or no technologies matched.")
+        
+        # Fetch and display the salary estimate
+        st.subheader("💰 Estimated Salary")
+        salary = fetch_salary_estimate(api_key)
+        if salary:
+            st.write(f"Estimated Salary: ${salary['min']} - ${salary['max']} per year")
+        else:
+            st.write("Could not fetch salary estimate.")
