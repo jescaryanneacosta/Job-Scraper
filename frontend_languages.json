@@ -1,0 +1,49 @@
+{
+    "languages": [
+      "HTML",
+      "CSS",
+      "JavaScript",
+      "TypeScript"
+    ],
+    "libraries": [
+      "React",
+      "jQuery",
+      "D3.js",
+      "Chart.js"
+    ],
+    "frameworks": [
+      "Angular",
+      "Vue.js",
+      "Svelte",
+      "Next.js",
+      "Nuxt.js",
+      "Ember.js"
+    ],
+    "css_tools": [
+      "Tailwind CSS",
+      "Bootstrap",
+      "Bulma",
+      "Sass",
+      "LESS",
+      "PostCSS"
+    ],
+    "build_tools": [
+      "Webpack",
+      "Vite",
+      "Parcel",
+      "Rollup"
+    ],
+    "related_technologies": [
+      "REST API",
+      "GraphQL",
+      "Figma",
+      "Git",
+      "NPM",
+      "Yarn"
+    ],
+
+    "test": ["developer"]
+      
+      
+  }
+  
