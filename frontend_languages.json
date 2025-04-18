@@ -3,7 +3,8 @@
       "HTML",
       "CSS",
       "JavaScript",
-      "TypeScript"
+      "TypeScript",
+        "PHP"
     ],
     "libraries": [
       "React",
