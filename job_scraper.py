@@ -68,9 +68,9 @@ def count_keywords(descriptions, keywords):
 # ---------- Streamlit UI ----------
 st.title("Frontend Job Tech Trends 📈 (Remotive + RemoteOK)")
 
-query = st.text_input("Job title (e.g., frontend developer)", "frontend developer")
+query = st.text_input("Job title", "developer")
 uploaded_file = st.file_uploader("Upload JSON file with frontend technologies", type="json")
-limit = st.slider("Max job listings to fetch", 10, 500, 100, step=50)
+limit = st.slider("Max job listings to fetch", 10, 1000, 100, step=50)
 
 if st.button("Run Analysis") and uploaded_file:
     with st.spinner("Fetching job listings…"):
